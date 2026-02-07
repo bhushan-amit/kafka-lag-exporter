@@ -170,6 +170,13 @@ object Metrics {
     groupLabels
   )
 
+  val ActiveConsumersMetric = GaugeDefinition(
+    "kafka_consumergroup_active_consumers",
+    "Number of active consumers in a consumer group",
+    groupLabels
+  )
+
+
   val groupPartitionLabels = List(
     "cluster_name",
     "group",
@@ -220,6 +227,7 @@ object Metrics {
     LastGroupOffsetMetric,
     OffsetLagMetric,
     TimeLagMetric,
+    ActiveConsumersMetric,
     SumGroupOffsetLagMetric,
     SumGroupTopicOffsetLagMetric,
     PollTimeMetric

@@ -47,7 +47,8 @@ object ConsumerGroupCollector {
       groups: List[String],
       earliestOffsets: PartitionOffsets,
       latestOffsets: PartitionOffsets,
-      lastGroupOffsets: GroupOffsets
+      lastGroupOffsets: GroupOffsets,
+      activeConsumers: Map[String, Int]
   ) extends Message {
     import OffsetsSnapshot._
 
@@ -200,22 +201,26 @@ object ConsumerGroupCollector {
             groups,
             earliestOffsets,
             latestOffsets,
-            groupOffsets
+            groupOffsets,
+            Map.empty   // will be overwritten later
           )
         }
 
-        context.log.info("Collecting offsets")
+        context.log.info("Collecting offsets and consumer group metadata for cluster: {}", config.cluster.name)
         val startPollingTime = config.clock.instant().toEpochMilli
         val f = for {
           (groups, groupTopicPartitions) <- client.getGroups()
+          activeConsumers <- client.getActiveConsumerCounts()
           offsetSnapshot <- getOffsetSnapshot(groups, groupTopicPartitions)
-        } yield offsetSnapshot
+        } yield (offsetSnapshot, activeConsumers)
 
         f.onComplete {
-          case Success(newOffsets) =>
+          case Success((newOffsets, activeConsumers)) =>
             val pollTimeMs =
               config.clock.instant().toEpochMilli - startPollingTime
-            context.self ! newOffsets
+            context.self ! newOffsets.copy(
+              activeConsumers = activeConsumers
+            )
             context.self ! MetaData(pollTimeMs)
           case Failure(t) =>
             context.self ! StopWithError(t)
@@ -366,6 +371,7 @@ object ConsumerGroupCollector {
       for ((group, groupValues) <- groupLag.groupBy(_.gtp.id)) {
         val maxOffsetLag = groupValues.maxBy(_.offsetLag)
         val maxTimeLag = groupValues.maxBy(_.timeLag)
+        val active = offsetsSnapshot.activeConsumers.getOrElse(group, 0)
 
         reporter ! Metrics.GroupValueMessage(
           Metrics.MaxGroupOffsetLagMetric,
@@ -378,6 +384,13 @@ object ConsumerGroupCollector {
           config.cluster.name,
           group,
           maxTimeLag.timeLag
+        )
+
+        reporter ! Metrics.GroupValueMessage(
+          Metrics.ActiveConsumersMetric,
+          config.cluster.name,
+          group,
+          active.toDouble
         )
 
         val sumOffsetLag =
@@ -457,6 +470,11 @@ object ConsumerGroupCollector {
       metricKeys.groups.foreach { group =>
         reporter ! Metrics.GroupRemoveMetricMessage(
           Metrics.MaxGroupOffsetLagMetric,
+          config.cluster.name,
+          group
+        )
+        reporter ! Metrics.GroupRemoveMetricMessage(
+          Metrics.ActiveConsumersMetric,
           config.cluster.name,
           group
         )

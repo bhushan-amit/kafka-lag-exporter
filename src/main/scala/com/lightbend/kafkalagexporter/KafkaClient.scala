@@ -60,6 +60,7 @@ object KafkaClient {
 
   trait KafkaClientContract {
     def getGroups(): Future[(List[String], List[Domain.GroupTopicPartition])]
+    def getActiveConsumerCounts(): Future[Map[String, Int]]
     def getGroupOffsets(
         now: Long,
         groups: List[String],
@@ -274,6 +275,21 @@ class KafkaClient private[kafkalagexporter] (
       }.toList
       val gtpsNoMembers = noMemberGroupsPartitionsInfo.flatten
       (groupIds, gtps ++ gtpsNoMembers)
+    }
+  }
+
+  /** Retrieve a mapping of consumer group IDs to their active member counts.
+   * This is used to monitor the current scale and connectivity of each consumer group.
+   */
+  def getActiveConsumerCounts(): Future[Map[String, Int]] = {
+    for {
+      groups <- adminClient.listConsumerGroups()
+      groupIds = getGroupIds(groups)
+      groupDescriptions <- adminClient.describeConsumerGroups(groupIds)
+    } yield {
+      groupDescriptions.asScala.map { case (id, desc) =>
+        id -> desc.members().size()
+      }.toMap
     }
   }
 
