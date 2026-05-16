@@ -48,7 +48,7 @@ object ConsumerGroupCollector {
       earliestOffsets: PartitionOffsets,
       latestOffsets: PartitionOffsets,
       lastGroupOffsets: GroupOffsets,
-      activeConsumers: Map[String, Int]
+      activeConsumers: Map[String, Int] = Map.empty
   ) extends Message {
     import OffsetsSnapshot._
 

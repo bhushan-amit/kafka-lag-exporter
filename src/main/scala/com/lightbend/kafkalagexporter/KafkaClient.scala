@@ -278,9 +278,11 @@ class KafkaClient private[kafkalagexporter] (
     }
   }
 
-  /** Retrieve a mapping of consumer group IDs to their active member counts.
-   * This is used to monitor the current scale and connectivity of each consumer group.
-   */
+  /** For each consumer group, the number of members that currently have at least one
+    * assigned topic partition. This drops to zero during prolonged rebalances or when
+    * no member has an active assignment (even if processes are still trying to join),
+    * unlike raw `ConsumerGroupDescription.members` size which can stay non-zero.
+    */
   def getActiveConsumerCounts(): Future[Map[String, Int]] = {
     for {
       groups <- adminClient.listConsumerGroups()
@@ -288,7 +290,11 @@ class KafkaClient private[kafkalagexporter] (
       groupDescriptions <- adminClient.describeConsumerGroups(groupIds)
     } yield {
       groupDescriptions.asScala.map { case (id, desc) =>
-        id -> desc.members().size()
+        val assignedMembers = desc.members().asScala.count { m =>
+          val asgn = m.assignment()
+          asgn != null && asgn.topicPartitions() != null && !asgn.topicPartitions().isEmpty
+        }
+        id -> assignedMembers
       }.toMap
     }
   }

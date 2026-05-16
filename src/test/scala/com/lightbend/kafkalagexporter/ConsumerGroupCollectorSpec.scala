@@ -79,7 +79,7 @@ class ConsumerGroupCollectorSpec
 
     val metrics = reporter.receiveAll()
 
-    "report 9 metrics" in { metrics.length shouldBe 9 }
+    "report 10 metrics" in { metrics.length shouldBe 10 }
 
     "earliest offset metric" in {
       metrics should contain(

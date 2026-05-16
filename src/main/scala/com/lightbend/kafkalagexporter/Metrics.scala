@@ -172,7 +172,7 @@ object Metrics {
 
   val ActiveConsumersMetric = GaugeDefinition(
     "kafka_consumergroup_active_consumers",
-    "Number of active consumers in a consumer group",
+    "Number of consumer group members with at least one assigned topic partition (zero while rebalancing or if no assignments)",
     groupLabels
   )
 
